@@ -9,7 +9,10 @@
     "php": "^8.4",
     "psr/http-message": "^1.0",
     "psr/http-server-middleware": "^1.0",
-    "webonyx/graphql-php": "^15.5"
+    "webonyx/graphql-php": "^15.5",
+    "ratchet/rfc6455": "^0.4.0",
+    "react/event-loop": "^0.4.3",
+    "cboden/ratchet": "^0.3.6"
   },
   "autoload": {
     "psr-4": {
