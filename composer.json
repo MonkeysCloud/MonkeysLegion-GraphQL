@@ -1,0 +1,29 @@
+{
+  "name": "monkeyscloud/monkeyslegion-graphql",
+  "description": "GraphQL bridge for the MonkeysLegion framework",
+  "type": "library",
+  "license": "MIT",
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "require": {
+    "php": "^8.4",
+    "psr/http-message": "^1.0",
+    "psr/http-server-middleware": "^1.0",
+    "webonyx/graphql-php": "^15.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "MonkeysLegion\\GraphQL\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "MonkeysLegion\\GraphQL\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "branch-alias": {
+      "dev-main": "1.0-dev"
+    }
+  }
+}
