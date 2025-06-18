@@ -22,6 +22,11 @@
     }
   },
   "extra": {
+    "monkeyslegion": {
+      "providers": [
+        "MonkeysLegion\\GraphQL\\GraphQL"
+      ]
+    },
     "branch-alias": {
       "dev-main": "1.0-dev"
     }
