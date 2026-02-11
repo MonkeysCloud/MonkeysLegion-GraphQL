@@ -1,27 +1,42 @@
-<?php
+<?php declare(strict_types=1);
+
 namespace MonkeysLegion\GraphQL\Subscription;
 
 /**
- * In-memory Pub/Sub implementation for testing or simple use cases.
- * This is not suitable for production use, as it does not support persistence
- * or distributed systems.
+ * Interface for publish/subscribe implementations.
+ *
+ * Abstracts the PubSub mechanism so that in-memory,
+ * Redis, or other implementations can be swapped.
  */
 interface PubSubInterface
 {
     /**
-     * Publishes a message to the specified topic.
+     * Publish a payload to a channel.
      *
-     * @param string $topic The topic to publish to.
-     * @param mixed $payload The payload to send to subscribers.
+     * @param string $channel Channel/topic name
+     * @param mixed  $payload The data to publish
+     *
+     * @return void
      */
-    public function publish(string $topic, mixed $payload): void;
+    public function publish(string $channel, mixed $payload): void;
 
     /**
-     * Subscribes a listener to a topic.
+     * Subscribe to a channel with a callback.
      *
-     * @param string $topic The topic to subscribe to.
-     * @param callable $listener The listener to call when a message is published.
-     * @return callable A function that can be called to unsubscribe the listener.
+     * @param string   $channel  Channel/topic name
+     * @param callable $callback Callback receiving the payload
+     *
+     * @return string Subscription ID for later unsubscribe
      */
-    public function subscribe(string $topic, callable $listener): callable;
+    public function subscribe(string $channel, callable $callback): string;
+
+    /**
+     * Unsubscribe from a channel.
+     *
+     * @param string $channel        Channel/topic name
+     * @param string $subscriptionId Subscription ID from subscribe()
+     *
+     * @return void
+     */
+    public function unsubscribe(string $channel, string $subscriptionId): void;
 }

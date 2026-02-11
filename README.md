@@ -1,16 +1,11 @@
-# 🐒 MonkeysLegion GraphQL
+# MonkeysLegion-GraphQL
 
-GraphQL adapter for the **MonkeysLegion** ecosystem – zero Symfony baggage, code-first PHP 8 attributes, PSR-15 middleware, and GraphiQL out of the box.
+**Code-first GraphQL server for the MonkeysLegion framework** — PHP 8.4 attributes, PSR-15, DataLoader, subscriptions, and security out of the box.
 
-| Feature                                                | Status |
-|--------------------------------------------------------|--------|
-| `/graphql` POST/GET endpoint                           | ✅      |
-| Attribute-driven **Type / Query / Mutation** discovery | ✅      |
-| Auto-DI & PSR-15 middleware binding via _providers_    | ✅      |
-| GraphiQL playground in dev                             | ✅      |
-| Subscriptions (WebSocket)                              | ✅      |
+## Requirements
 
----
+- PHP 8.4+
+- `webonyx/graphql-php` ^15.30
 
 ## Installation
 
@@ -18,119 +13,467 @@ GraphQL adapter for the **MonkeysLegion** ecosystem – zero Symfony baggage, co
 composer require monkeyscloud/monkeyslegion-graphql
 ```
 
-The package adds itself to composer.json → extra.monkeyslegion.providers
-so your bootstrap auto-registers its services – no manual edits to
-config/app.php are required.
+The `GraphQLProvider` is auto-registered via `composer.json` extra.
 
-### Bootstrap hook
-Make sure your public/index.php (or CLI kernel) contains the
-provider-loading loop described in the docs.
+## Quick Start
 
-## Quick start
-### 1 · Define your first type & query
+### 1. Define a Type
+
 ```php
-// app/GraphQL/Types/PostType.php
-namespace App\GraphQL\Types;
+use MonkeysLegion\GraphQL\Attribute\{Type, Field};
 
-use MonkeysLegion\GraphQL\Attribute\Type;
-use GraphQL\Type\Definition\Type as GQLType;
-use GraphQL\Type\Definition\ObjectType;
-
-#[Type]
-final class PostType extends ObjectType
+#[Type(description: 'A user')]
+final class UserType
 {
-    public function __construct()
+    #[Field]
+    public function id(User $root): int
     {
-        parent::__construct([
-            'name'   => 'Post',
-            'fields' => [
-                'id'    => GQLType::nonNull(GQLType::id()),
-                'title' => GQLType::string(),
-                'body'  => GQLType::string(),
-            ],
-        ]);
+        return $root->id;
+    }
+
+    #[Field]
+    public function name(User $root): string
+    {
+        return $root->name;
+    }
+
+    #[Field(description: 'Email address')]
+    public function email(User $root): string
+    {
+        return $root->email;
     }
 }
 ```
+
+### 2. Define a Query
+
 ```php
-// app/GraphQL/Query/BlogQuery.php
-namespace App\GraphQL\Query;
+use MonkeysLegion\GraphQL\Attribute\{Query, Arg};
+use MonkeysLegion\GraphQL\Context\GraphQLContext;
 
-use MonkeysLegion\GraphQL\Attribute\Query;
-use GraphQL\Type\Definition\ResolveInfo;
-use App\Repository\PostRepository;
-
-#[Query(name: 'posts')]
-final class BlogQuery
+#[Query(name: 'user', description: 'Get user by ID')]
+final class GetUserQuery
 {
-    public function __construct(private PostRepository $repo) {}
+    public function __construct(private UserRepository $users) {}
 
-    public function __invoke(mixed $root, array $args, mixed $ctx, ResolveInfo $info): array
-    {
-        return $this->repo->findAll();
+    public function __invoke(
+        mixed $root,
+        #[Arg(description: 'User ID')] int $id,
+        GraphQLContext $context,
+    ): ?User {
+        return $this->users->find($id);
     }
 }
 ```
-Drop more classes with #[Type], #[Query], #[Mutation] and they’ll be auto-discovered at hot-reload.
 
-## 2 · Define a Subscription
+### 3. Define a Mutation
+
 ```php
-// app/GraphQL/Subscription/CounterSub.php
-namespace App\GraphQL\Subscription;
+use MonkeysLegion\GraphQL\Attribute\{Mutation, Arg};
 
+#[Mutation(name: 'createUser', description: 'Create a new user')]
+final class CreateUserMutation
+{
+    public function __construct(private UserRepository $users) {}
+
+    public function __invoke(
+        mixed $root,
+        #[Arg] string $name,
+        #[Arg] string $email,
+    ): User {
+        return $this->users->create($name, $email);
+    }
+}
+```
+
+### 4. Configure
+
+```yaml
+# config/graphql.mlc
+graphql:
+  endpoint: /graphql
+  scan:
+    directories:
+      - app/GraphQL
+  security:
+    max_depth: 10
+    max_complexity: 200
+```
+
+## Features
+
+### Attributes
+
+| Attribute | Target | Purpose |
+|-----------|--------|---------|
+| `#[Type]` | Class | GraphQL object type |
+| `#[Field]` | Method/Property | Object type field |
+| `#[Query]` | Class | Root query field |
+| `#[Mutation]` | Class | Root mutation field |
+| `#[Subscription]` | Class | Subscription field |
+| `#[Arg]` | Parameter | Argument metadata |
+| `#[InputType]` | Class | Input object type |
+| `#[Enum]` | Backed enum | Enum type |
+| `#[InterfaceType]` | Class/Interface | Interface type |
+| `#[UnionType]` | Class | Union type |
+| `#[Middleware]` | Class/Method | Per-field middleware |
+
+### Custom Scalars
+
+- `DateTime` — ISO 8601 serialization
+- `JSON` — Arbitrary JSON passthrough
+- `Email` — Email format validation
+- `URL` — URL format validation
+- `Upload` — Multipart file upload
+
+### Security
+
+```yaml
+graphql:
+  security:
+    max_depth: 10          # Query depth limiting
+    max_complexity: 200    # Field cost analysis
+    introspection: false   # Disable introspection in production
+    persisted_queries: true # APQ with SHA256
+    rate_limit:
+      enabled: true
+      max_requests: 100
+      window_seconds: 60
+```
+
+### DataLoader (N+1 Prevention)
+
+```php
+use MonkeysLegion\GraphQL\Loader\DataLoader;
+
+final class UserLoader extends DataLoader
+{
+    public function __construct(private UserRepository $users) {}
+
+    protected function batchLoad(array $keys): array
+    {
+        $users = $this->users->findByIds($keys);
+        return array_map(
+            fn(int $id) => $users[$id] ?? null,
+            $keys,
+        );
+    }
+}
+```
+
+### Relay Pagination
+
+```php
+use MonkeysLegion\GraphQL\Type\ConnectionType;
+
+// Automatically creates UserConnection, UserEdge, PageInfo types
+$connectionType = ConnectionType::create('User', $userType);
+```
+
+### Subscriptions
+
+```php
 use MonkeysLegion\GraphQL\Attribute\Subscription;
-use GraphQL\Type\Definition\ObjectType;
-use GraphQL\Type\Definition\Type as GQLType;
-use MonkeysLegion\GraphQL\Subscription\PubSubInterface;
 
-#[Subscription(name: 'counter')]
-final class CounterSub extends ObjectType
+#[Subscription(name: 'messageAdded', description: 'New message')]
+final class MessageAddedSubscription
 {
-    public function __construct(PubSubInterface $pubsub)
+    public function __invoke(mixed $root): Message
     {
-        parent::__construct([
-            'name'       => 'CounterSub',
-            'fields'     => [
-                'count' => ['type' => GQLType::int()],
-            ],
-            'subscribe'  => fn() => $pubsub->subscribe('counter.tick', fn($v) => ['count' => $v]),
-            'resolve'    => fn($root) => $root,
-        ]);
+        return $root;
     }
 }
 ```
 
-### 3 · Hit the endpoint
-```bash
-curl -X POST http://localhost:8000/graphql \
-     -H "Content-Type: application/json" \
-     -d '{"query":"{ posts { id title } }"}'
-```
-## How it works
+Supports `graphql-ws` protocol with in-memory and Redis PubSub backends.
+
+### File Uploads
+
+Follows the [GraphQL multipart request spec](https://github.com/jaydenseric/graphql-multipart-request-spec):
+
 ```php
-app/GraphQL/*
-   ├─ #[Type]          → GraphQL\Type\Definition\ObjectType
-   ├─ #[Query]         → fields merged into root Query
-   ├─ #[Mutation]      → fields merged into root Mutation
-   └─ #[Subscription]  → root “Subscription” fields
+#[Mutation(name: 'uploadFile')]
+final class UploadFileMutation
+{
+    public function __invoke(
+        mixed $root,
+        #[Arg] UploadedFileInterface $file,
+    ): string {
+        $file->moveTo('/uploads/' . $file->getClientFilename());
+        return $file->getClientFilename();
+    }
+}
 ```
 
-1. Scanner crawls app/GraphQL/ for the attributes.
-2. SchemaFactory builds a Webonyx Schema on boot.
-3. Executor runs each request with MonkeysLegion services injected into resolvers.
-4. SubscriptionServer + WsHandler manage WebSockets on port 6001.
-5. Middleware pipes into your existing PSR-15 stack at /graphql.
+## CLI Commands
 
-| Attribute             | Target                     | Purpose                                                                 |
-|-----------------------|----------------------------|-------------------------------------------------------------------------|
-| #[Type]               | class (extends ObjectType) | Registers a reusable GraphQL type.                                      |
-| #[Query(name)]        | class (callable)           | Adds a field to root Query; method/callable must return resolver value. |
-| #[Mutation(name)]     | class (callable)           | Adds a field to root Mutation.                                          |
-| #[Subscription(name)] | class (callable)           | Adds root Subscription.                                                 |
+| Command | Description |
+|---------|-------------|
+| `php ml graphql:schema:dump` | Dump schema as SDL |
+| `php ml graphql:schema:validate` | Validate schema |
+| `php ml graphql:cache:warm` | Warm schema cache |
+| `php ml graphql:cache:clear` | Clear schema cache |
+| `php ml graphql:introspect` | Dump introspection JSON |
 
-## Contributing
-1.	git clone & composer install
-2.	vendor/bin/phpunit – tests must stay green
-3.	PRs against main, follow PSR-12, add doc-blocks / tests
+## Entity Integration
 
-MIT license – happy hacking! 🐒🚀
+When `monkeyslegion-entity` is installed, you can auto-map your entities to GraphQL types without writing boilerplate type classes.
+
+### Entity Example
+
+```php
+use MonkeysLegion\Entity\Attribute\Entity;
+use MonkeysLegion\Entity\Attribute\Id;
+use MonkeysLegion\Entity\Attribute\Column;
+
+#[Entity(table: 'products')]
+class Product
+{
+    #[Id]
+    public int $id;
+
+    #[Column(type: 'varchar', length: 255)]
+    public string $name;
+
+    #[Column(type: 'text')]
+    public string $description;
+
+    #[Column(type: 'decimal')]
+    public float $price;
+
+    #[Column(type: 'boolean')]
+    public bool $active;
+
+    #[Column(type: 'datetime')]
+    public \DateTimeImmutable $createdAt;
+}
+```
+
+### Auto-Map Entities to GraphQL Types
+
+```php
+use MonkeysLegion\GraphQL\Scanner\EntityTypeMapper;
+
+$mapper = new EntityTypeMapper();
+
+// Maps all typed properties → GraphQL fields automatically:
+//   int    → Int!        float  → Float!
+//   string → String!     bool   → Boolean!
+//   DateTime* → DateTime!  (custom scalar)
+//   ?string → String     (nullable)
+$typeConfig = $mapper->map(Product::class);
+// Returns: ['name' => 'Product', 'fields' => ['id' => ..., 'name' => ..., ...]]
+
+// Map multiple entities at once
+$types = $mapper->mapAll([Product::class, Category::class, Order::class]);
+```
+
+### Auto-Generated CRUD Resolvers
+
+Use `EntityResolver` to expose entities without manual resolver classes:
+
+```php
+use MonkeysLegion\GraphQL\Resolver\EntityResolver;
+use MonkeysLegion\GraphQL\Type\ConnectionType;
+
+// Single entity by ID
+//   query { product(id: 42) { name price } }
+$findProduct = EntityResolver::findById(
+    Product::class,
+    ProductRepository::class, // optional — defaults to Product::class . 'Repository'
+);
+
+// List all entities
+//   query { products { name price active } }
+$listProducts = EntityResolver::findAll(Product::class);
+
+// Relay-style pagination with cursors
+//   query { products(first: 10, after: "Y3Vyc29yOjk=") {
+//     edges { node { name } cursor }
+//     pageInfo { hasNextPage endCursor }
+//     totalCount
+//   }}
+$paginatedProducts = EntityResolver::connection(Product::class);
+```
+
+### Full Example: Entity-Backed Schema
+
+```php
+use MonkeysLegion\GraphQL\Attribute\{Type, Field, Query, Arg};
+use MonkeysLegion\GraphQL\Context\GraphQLContext;
+
+// 1. Define the GraphQL type wrapping the entity
+#[Type(description: 'A product in the catalog')]
+final class ProductType
+{
+    #[Field]
+    public function id(Product $root): int { return $root->id; }
+
+    #[Field]
+    public function name(Product $root): string { return $root->name; }
+
+    #[Field]
+    public function price(Product $root): float { return $root->price; }
+
+    #[Field(description: 'Active in store?')]
+    public function active(Product $root): bool { return $root->active; }
+
+    #[Field(description: 'ISO 8601')]
+    public function createdAt(Product $root): string {
+        return $root->createdAt->format('c');
+    }
+}
+
+// 2. Query resolver using the repository from DI
+#[Query(name: 'product', description: 'Find product by ID')]
+final class GetProductQuery
+{
+    public function __construct(private ProductRepository $products) {}
+
+    public function __invoke(
+        mixed $root,
+        #[Arg(description: 'Product ID')] int $id,
+        GraphQLContext $context,
+    ): ?Product {
+        return $this->products->find($id);
+    }
+}
+
+// 3. List with filtering
+#[Query(name: 'products', description: 'List products')]
+final class ListProductsQuery
+{
+    public function __construct(private ProductRepository $products) {}
+
+    public function __invoke(
+        mixed $root,
+        #[Arg(nullable: true)] ?bool $active,
+        #[Arg(nullable: true, defaultValue: 20)] int $limit,
+    ): array {
+        if ($active !== null) {
+            return $this->products->findByActive($active, $limit);
+        }
+        return $this->products->findAll($limit);
+    }
+}
+```
+
+## Route Registration
+
+`GraphQLProvider` automatically registers routes with `monkeyslegion-router` when the application boots.
+
+### Default Routes
+
+| Method | Path | Handler | Description |
+|--------|------|---------|-------------|
+| `POST` | `/graphql` | `GraphQLMiddleware` | Queries & mutations |
+| `GET` | `/graphql` | `GraphQLMiddleware` | Simple GET queries |
+| `GET` | `/graphiql` | `GraphiQLMiddleware` | Interactive IDE (dev) |
+
+### Configuration
+
+```yaml
+# config/graphql.mlc
+graphql:
+  endpoint: /graphql            # Change the endpoint path
+  graphiql_enabled: true        # Disable GraphiQL in production
+  graphiql_endpoint: /graphiql  # Custom GraphiQL path
+  debug: false                  # Enable for detailed error traces
+  scan_dirs:
+    - app/GraphQL               # Where to find Type/Query/Mutation classes
+  scan_namespace: App\GraphQL   # PSR-4 namespace for scanned classes
+  security:
+    max_depth: 10
+    max_complexity: 200
+    introspection: true         # Disable in production
+    persisted_queries: false
+    rate_limit:
+      max_requests: 100
+      window_seconds: 60
+  cache:
+    enabled: false
+    ttl: 3600                   # Schema cache TTL in seconds
+  subscriptions:
+    enabled: false
+    driver: memory              # 'memory' or 'redis'
+    host: 0.0.0.0
+    port: 6001
+    redis_dsn: redis://127.0.0.1:6379
+```
+
+### How Route Registration Works
+
+The `GraphQLProvider::register()` method is called automatically during application bootstrap (via the `monkeyslegion` extra in `composer.json`). Here's what happens:
+
+```php
+// This happens automatically — no manual setup needed.
+// The provider:
+//   1. Reads config/graphql.mlc
+//   2. Registers all GraphQL services in the DI container
+//   3. Registers routes with MonkeysLegion\Router\Router
+
+// Routes are registered as closures that delegate to PSR-15 middleware:
+$router->post('/graphql', $graphqlHandler, 'graphql');
+$router->get('/graphql', $graphqlHandler, 'graphql.get');
+$router->get('/graphiql', $graphiqlHandler, 'graphiql'); // if enabled
+```
+
+### Custom Route Middleware
+
+Stack your own middleware (auth, CORS, rate-limiting) alongside GraphQL:
+
+```php
+use MonkeysLegion\GraphQL\Attribute\Middleware;
+
+// Per-resolver middleware
+#[Middleware('App\Middleware\AuthMiddleware')]
+#[Middleware('App\Middleware\RateLimitMiddleware')]
+#[Query(name: 'adminUsers')]
+final class AdminUsersQuery
+{
+    public function __invoke(mixed $root, GraphQLContext $context): array
+    {
+        // Only reached if auth + rate-limit pass
+        return $context->container->get(UserRepository::class)->findAdmins();
+    }
+}
+```
+
+### Testing the Endpoint
+
+```bash
+# Simple query
+curl -X POST http://localhost:8080/graphql \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "{ product(id: 1) { name price } }"}'
+
+# Mutation
+curl -X POST http://localhost:8080/graphql \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "mutation { createProduct(name: \"Widget\", price: 9.99) { id name } }"}'
+
+# GET request (simple queries only)
+curl 'http://localhost:8080/graphql?query=\{products\{name\}\}'
+
+# Open GraphiQL IDE in browser
+open http://localhost:8080/graphiql
+```
+
+## Facade
+
+```php
+use MonkeysLegion\GraphQL\GraphQL;
+
+// Execute a query programmatically
+$result = GraphQL::execute('{ user(id: 1) { name } }');
+
+// Publish a subscription event
+GraphQL::publish('messageAdded', $message);
+
+// Get the built schema
+$schema = GraphQL::schema();
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
