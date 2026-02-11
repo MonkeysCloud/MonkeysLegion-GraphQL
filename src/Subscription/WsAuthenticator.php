@@ -5,8 +5,19 @@ namespace MonkeysLegion\GraphQL\Subscription;
 /**
  * Authenticates WebSocket connections from connection_init payload.
  *
- * Verifies JWT tokens or other credentials provided in the
- * connection initialization message.
+ * **IMPORTANT**: You MUST provide a custom `$authHandler` that verifies
+ * tokens using a proper JWT library or your own authentication service.
+ * Without a custom handler, authentication will reject all connections
+ * with a token (connections without a token will be allowed as anonymous).
+ *
+ * Example using monkeyslegion-auth:
+ * ```php
+ * new WsAuthenticator(function (array $payload) use ($jwtService): ?object {
+ *     $token = $payload['Authorization'] ?? $payload['token'] ?? null;
+ *     if ($token === null) return null;
+ *     return $jwtService->verify(str_replace('Bearer ', '', $token));
+ * });
+ * ```
  */
 final class WsAuthenticator
 {
@@ -15,6 +26,7 @@ final class WsAuthenticator
 
     /**
      * @param callable|null $authHandler Custom handler: fn(array $payload): ?object
+     *                                   You MUST provide this for authenticated subscriptions.
      */
     public function __construct(?callable $authHandler = null)
     {
@@ -24,9 +36,15 @@ final class WsAuthenticator
     /**
      * Authenticate a connection from its initialization payload.
      *
+     * If no custom authHandler is provided, connections that include an
+     * authentication token will be rejected (returns null). Connections
+     * without a token are allowed as anonymous (returns null).
+     *
      * @param array<string, mixed> $payload The connection_init payload
      *
-     * @return object|null The authenticated user object, or null
+     * @return object|null The authenticated user object, or null if unauthenticated
+     *
+     * @throws \RuntimeException If a token is present but no authHandler is configured
      */
     public function authenticate(array $payload): ?object
     {
@@ -34,45 +52,20 @@ final class WsAuthenticator
             return ($this->authHandler)($payload);
         }
 
-        // Default: extract token and attempt basic validation
+        // Check if client is trying to authenticate without a handler configured
         $token = $payload['Authorization'] ?? $payload['authorization']
             ?? $payload['token'] ?? $payload['authToken'] ?? null;
 
-        if ($token === null) {
-            return null;
+        if ($token !== null) {
+            throw new \RuntimeException(
+                'WebSocket authentication token received but no authHandler is configured. '
+                . 'You must provide a custom authHandler to WsAuthenticator that properly '
+                . 'verifies token signatures. Accepting unverified tokens is a security vulnerability.',
+            );
         }
 
-        // Remove 'Bearer ' prefix if present
-        if (is_string($token) && str_starts_with($token, 'Bearer ')) {
-            $token = substr($token, 7);
-        }
-
-        // Basic JWT structure validation (3 base64url-encoded segments)
-        if (!is_string($token) || substr_count($token, '.') !== 2) {
-            return null;
-        }
-
-        // Decode the payload segment for basic user info
-        $segments = explode('.', $token);
-        $payloadJson = base64_decode(strtr($segments[1], '-_', '+/'), true);
-
-        if ($payloadJson === false) {
-            return null;
-        }
-
-        $claims = json_decode($payloadJson, true);
-
-        if (!is_array($claims)) {
-            return null;
-        }
-
-        // Check expiration
-        if (isset($claims['exp']) && $claims['exp'] < time()) {
-            return null;
-        }
-
-        // Return an anonymous object with the claims
-        return (object) $claims;
+        // No token provided — allow as anonymous connection
+        return null;
     }
 
     /**

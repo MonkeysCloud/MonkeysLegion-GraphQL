@@ -124,7 +124,13 @@ final class EntityResolver
             }
 
             $repository = $container->get($repoClass);
-            $offset = $after !== null ? (int) base64_decode($after, true) + 1 : 0;
+            $offset = 0;
+            if ($after !== null) {
+                $decoded = base64_decode($after, true);
+                if ($decoded !== false && is_numeric($decoded)) {
+                    $offset = (int) $decoded + 1;
+                }
+            }
 
             // Try to get items with one extra for hasNextPage detection
             $items = [];

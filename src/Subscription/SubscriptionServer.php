@@ -165,19 +165,36 @@ final class SubscriptionServer
     }
 
     /**
-     * Extract the subscription field name as the channel from a query.
+     * Extract the subscription channel name from a query.
      *
-     * Simple parsing — looks for the first field after 'subscription'.
+     * Uses the webonyx/graphql-php parser to properly handle complex
+     * GraphQL syntax (aliases, fragments, comments, etc.).
      *
      * @param string $query The GraphQL subscription query
      *
-     * @return string The channel name
+     * @return string The channel name (first subscription field)
      */
     private function extractChannel(string $query): string
     {
-        // Match pattern: subscription { fieldName ... }
-        if (preg_match('/subscription\s*(?:\w+\s*)?\{[\s\n]*(\w+)/i', $query, $matches)) {
-            return $matches[1];
+        try {
+            $document = \GraphQL\Language\Parser::parse($query);
+
+            foreach ($document->definitions as $definition) {
+                if (!$definition instanceof \GraphQL\Language\AST\OperationDefinitionNode) {
+                    continue;
+                }
+                if ($definition->operation !== 'subscription') {
+                    continue;
+                }
+
+                foreach ($definition->selectionSet->selections as $selection) {
+                    if ($selection instanceof \GraphQL\Language\AST\FieldNode) {
+                        return $selection->name->value;
+                    }
+                }
+            }
+        } catch (\GraphQL\Error\SyntaxError) {
+            // Fall through to default
         }
 
         return 'default';
