@@ -1,0 +1,8 @@
+parameters:
+    level: 8
+    paths:
+        - src
+    excludePaths:
+        - src/Command
+    ignoreErrors:
+        - '#Parameter \#1 .* of class .* constructor expects .*, null given#'

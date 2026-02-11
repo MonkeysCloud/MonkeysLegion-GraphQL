@@ -1,0 +1,38 @@
+# GraphQL Configuration
+# See: https://monkeyslegion.com/docs/packages/graphql/configuration
+
+graphql:
+  # HTTP endpoint
+  endpoint: /graphql
+  graphiql_endpoint: /graphiql
+  graphiql_enabled: true
+
+  # Schema scanning — directories to scan for GraphQL attributes
+  scan:
+    directories:
+      - app/GraphQL
+
+  # Security
+  security:
+    max_depth: 10
+    max_complexity: 200
+    introspection: true
+    persisted_queries: false
+    rate_limit:
+      enabled: false
+      max_requests: 100
+      window_seconds: 60
+
+  # Caching
+  cache:
+    enabled: false
+    ttl: 3600
+
+  # Subscriptions
+  subscriptions:
+    enabled: false
+    driver: memory       # memory | redis
+    redis_url: "env(REDIS_URL, redis://127.0.0.1:6379)"
+
+  # Debug
+  debug: "env(APP_DEBUG, false)"
