@@ -311,7 +311,7 @@ final class SchemaBuilder
                     : $this->resolveMethodReturnType($invokeMethod);
 
                 // Build arguments from __invoke parameters
-                $args = $this->argumentBuilder->buildFromMethod($invokeMethod, 0, $this->typeMap);
+                $args = $this->argumentBuilder->buildFromMethod($invokeMethod, 1, $this->typeMap);
 
                 // Collect middleware
                 $middlewareList = $this->collectMiddleware($reflection, $invokeMethod);

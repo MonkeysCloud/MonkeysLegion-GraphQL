@@ -4,6 +4,7 @@ namespace MonkeysLegion\GraphQL\Executor;
 
 use GraphQL\GraphQL;
 use GraphQL\Type\Schema;
+use GraphQL\Validator\DocumentValidator;
 use MonkeysLegion\GraphQL\Context\GraphQLContext;
 use MonkeysLegion\GraphQL\Error\ErrorHandler;
 
@@ -49,7 +50,9 @@ final class QueryExecutor
             contextValue: $context,
             variableValues: $variables,
             operationName: $operationName,
-            validationRules: $validationRules !== [] ? $validationRules : null,
+            validationRules: $validationRules !== []
+                ? array_merge(DocumentValidator::defaultRules(), $validationRules)
+                : null,
         );
 
         $result->setErrorFormatter($this->errorHandler->formatter());
@@ -85,7 +88,9 @@ final class QueryExecutor
             contextValue: $context,
             variableValues: $variables,
             operationName: $operationName,
-            validationRules: $validationRules !== [] ? $validationRules : null,
+            validationRules: $validationRules !== []
+                ? array_merge(DocumentValidator::defaultRules(), $validationRules)
+                : null,
         );
     }
 }
