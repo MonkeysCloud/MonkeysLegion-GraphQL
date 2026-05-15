@@ -36,7 +36,7 @@ final class GraphQLFacadeTest extends TestCase
     public function testResolveThrowsWithoutContainer(): void
     {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('requires a container');
+        $this->expectExceptionMessageMatches('/requires a container/');
         GraphQL::config();
     }
 

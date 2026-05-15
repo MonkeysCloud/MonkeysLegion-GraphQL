@@ -41,7 +41,7 @@ class SecurityEnforcerTest extends TestCase
         $wrapped = SecurityEnforcer::wrap($resolver, $ref);
 
         $this->expectException(Error::class);
-        $this->expectExceptionMessage('Unauthenticated');
+        $this->expectExceptionMessageMatches('/Unauthenticated/');
 
         $wrapped(null, [], $this->makeContext(null), $this->makeResolveInfo());
     }
@@ -91,7 +91,7 @@ class SecurityEnforcerTest extends TestCase
         };
 
         $this->expectException(Error::class);
-        $this->expectExceptionMessage('Forbidden');
+        $this->expectExceptionMessageMatches('/Forbidden/');
 
         $wrapped(null, [], $this->makeContext($user), $this->makeResolveInfo());
     }
@@ -126,7 +126,7 @@ class SecurityEnforcerTest extends TestCase
         };
 
         $this->expectException(Error::class);
-        $this->expectExceptionMessage('Missing required permissions');
+        $this->expectExceptionMessageMatches('/Missing required permissions/');
 
         $wrapped(null, [], $this->makeContext($user), $this->makeResolveInfo());
     }

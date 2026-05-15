@@ -20,7 +20,7 @@ final class WsAuthenticatorTest extends TestCase
         $auth = new WsAuthenticator();
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('no authHandler is configured');
+        $this->expectExceptionMessageMatches('/no authHandler is configured/');
 
         $auth->authenticate(['token' => 'abc123']);
     }

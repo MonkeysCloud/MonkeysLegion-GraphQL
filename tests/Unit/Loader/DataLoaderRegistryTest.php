@@ -54,7 +54,7 @@ final class DataLoaderRegistryTest extends TestCase
     {
         $registry = new DataLoaderRegistry();
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('DataLoader "missing" not found');
+        $this->expectExceptionMessageMatches('/DataLoader "missing" not found/');
         $registry->get('missing');
     }
 

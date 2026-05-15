@@ -60,7 +60,7 @@ final class ResolverFactoryTest extends TestCase
         $factory = new ResolverFactory($container);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('does not have an __invoke method');
+        $this->expectExceptionMessageMatches('/does not have an __invoke method/');
 
         $factory->invoke('stdClass');
     }

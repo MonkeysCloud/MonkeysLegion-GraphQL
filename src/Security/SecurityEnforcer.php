@@ -9,7 +9,6 @@ use MonkeysLegion\GraphQL\Attribute\RequireAuth;
 use MonkeysLegion\GraphQL\Attribute\RequirePermission;
 use MonkeysLegion\GraphQL\Attribute\RequireRole;
 use MonkeysLegion\GraphQL\Context\GraphQLContext;
-use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use ReflectionMethod;
 

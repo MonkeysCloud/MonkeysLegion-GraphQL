@@ -73,7 +73,7 @@ final class PersistedQueriesTest extends TestCase
     {
         $pq = new PersistedQueries($this->cache);
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('hash mismatch');
+        $this->expectExceptionMessageMatches('/hash mismatch/i');
         $pq->process('{ posts { id } }', [
             'persistedQuery' => ['sha256Hash' => 'wronghash', 'version' => 1],
         ]);

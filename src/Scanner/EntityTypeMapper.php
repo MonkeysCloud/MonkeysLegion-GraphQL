@@ -152,6 +152,10 @@ final class EntityTypeMapper
             $targetEntity = $attr->targetEntity;
 
             return static function (mixed $root, array $args, \MonkeysLegion\GraphQL\Context\GraphQLContext $ctx) use ($targetEntity, $propName) {
+                if (!is_object($root)) {
+                    return null;
+                }
+
                 // If it's already hydrated, return it directly.
                 $reflection = new \ReflectionProperty($root, $propName);
                 if ($reflection->isInitialized($root)) {
@@ -244,15 +248,23 @@ final class EntityTypeMapper
             return static fn() => Type::string();
         }
 
+        // Use static singletons for custom scalars to avoid duplicate type names
+        static $jsonScalar = null;
+        static $dateTimeScalar = null;
+
         return match ($typeName) {
             'int'                       => static fn() => Type::int(),
             'float'                     => static fn() => Type::float(),
             'string'                    => static fn() => Type::string(),
             'bool'                      => static fn() => Type::boolean(),
-            'array'                     => static fn() => new JsonScalar(),
+            'array'                     => static function () use (&$jsonScalar) {
+                return $jsonScalar ??= new JsonScalar();
+            },
             \DateTimeInterface::class,
             \DateTime::class,
-            \DateTimeImmutable::class   => static fn() => new DateTimeScalar(),
+            \DateTimeImmutable::class   => static function () use (&$dateTimeScalar) {
+                return $dateTimeScalar ??= new DateTimeScalar();
+            },
             default                     => null,
         };
     }
