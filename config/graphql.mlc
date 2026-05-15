@@ -1,38 +1,43 @@
 # GraphQL Configuration
 # See: https://monkeyslegion.com/docs/packages/graphql/configuration
 
-graphql:
-  # HTTP endpoint
-  endpoint: /graphql
-  graphiql_endpoint: /graphiql
-  graphiql_enabled: true
+graphql {
+    # ── HTTP Endpoints ──────────────────────────────────────
+    endpoint          = "/graphql"
+    graphiql_endpoint = "/graphiql"
+    graphiql_enabled  = true
 
-  # Schema scanning — directories to scan for GraphQL attributes
-  scan:
-    directories:
-      - app/GraphQL
+    # ── Schema Scanning ─────────────────────────────────────
+    scan_dirs      = ["app/GraphQL"]
+    scan_namespace = "App\\GraphQL"
 
-  # Security
-  security:
-    max_depth: 10
-    max_complexity: 200
-    introspection: true
-    persisted_queries: false
-    rate_limit:
-      enabled: false
-      max_requests: 100
-      window_seconds: 60
+    # ── Security ────────────────────────────────────────────
+    security {
+        max_depth         = 10
+        max_complexity    = 200
+        introspection     = true
+        persisted_queries = false
 
-  # Caching
-  cache:
-    enabled: false
-    ttl: 3600
+        rate_limit {
+            enabled        = false
+            max_requests   = 100
+            window_seconds = 60
+        }
+    }
 
-  # Subscriptions
-  subscriptions:
-    enabled: false
-    driver: memory       # memory | redis
-    redis_url: "env(REDIS_URL, redis://127.0.0.1:6379)"
+    # ── Schema Cache ────────────────────────────────────────
+    cache {
+        enabled = false
+        ttl     = 3600
+    }
 
-  # Debug
-  debug: "env(APP_DEBUG, false)"
+    # ── Subscriptions (WebSocket) ───────────────────────────
+    subscriptions {
+        enabled   = false
+        driver    = "memory"     # "memory" or "redis"
+        redis_dsn = ${REDIS_URL:redis://127.0.0.1:6379}
+    }
+
+    # ── Debug ───────────────────────────────────────────────
+    debug = ${APP_DEBUG:false}
+}

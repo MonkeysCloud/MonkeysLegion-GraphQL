@@ -64,7 +64,10 @@ final class GraphQLProvider implements ProviderInterface
             if (file_exists($configPath) && class_exists(\MonkeysLegion\Mlc\Loader::class)) {
                 $loader = new \MonkeysLegion\Mlc\Loader(new \MonkeysLegion\Mlc\Parser());
                 $config = $loader->load($configPath);
-                $data = $config->all();
+
+                // MLC parser returns nested arrays; GraphQLConfig expects
+                // flat dot-notation keys (e.g. 'graphql.security.max_depth').
+                $data = self::flattenConfig($config->all());
             }
 
             return new GraphQLConfig($data);
@@ -265,5 +268,32 @@ final class GraphQLProvider implements ProviderInterface
     public static function setLogger(object $logger): void
     {
         self::$logger = $logger;
+    }
+
+    /**
+     * Flatten a nested array into dot-notation keys.
+     *
+     * E.g. ['graphql' => ['endpoint' => '/gql']] → ['graphql.endpoint' => '/gql']
+     *
+     * @param array<string, mixed> $data   Nested config data
+     * @param string               $prefix Dot-notation prefix for recursion
+     *
+     * @return array<string, mixed>
+     */
+    private static function flattenConfig(array $data, string $prefix = ''): array
+    {
+        $result = [];
+
+        foreach ($data as $key => $value) {
+            $fullKey = $prefix !== '' ? $prefix . '.' . $key : $key;
+
+            if (is_array($value) && !array_is_list($value)) {
+                $result = array_merge($result, self::flattenConfig($value, $fullKey));
+            } else {
+                $result[$fullKey] = $value;
+            }
+        }
+
+        return $result;
     }
 }

@@ -1,50 +1,62 @@
-# ─────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════
 # MonkeysLegion GraphQL — Configuration
-# File: config/graphql.mlc
-# ─────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════
+#
+# Enterprise GraphQL engine for MonkeysLegion applications.
+# Copy to config/graphql.mlc and adjust values as needed.
 
-# ── HTTP Endpoints ──────────────────────────────────────────
-graphql.endpoint = "/graphql"
-graphql.graphiql_endpoint = "/graphiql"
-graphql.graphiql_enabled = true
+graphql {
+    # ── HTTP Endpoints ──────────────────────────────────────
+    endpoint          = "/graphql"
+    graphiql_endpoint = "/graphiql"
+    graphiql_enabled  = ${APP_DEBUG:true}
 
-# ── Schema Scanning ─────────────────────────────────────────
-# Directories (relative to project root) where GraphQL types,
-# queries, mutations, and subscriptions are defined.
-graphql.scan_dirs = ["app/GraphQL"]
-graphql.scan_namespace = "App\\GraphQL"
+    # ── Schema Scanning ─────────────────────────────────────
+    # Directories (relative to project root) containing
+    # GraphQL types, queries, mutations, and subscriptions.
+    scan_dirs      = ["app/GraphQL"]
+    scan_namespace = "App\\GraphQL"
 
-# ── Security ────────────────────────────────────────────────
-# Max query depth (0 = unlimited). Prevents deeply nested queries.
-graphql.security.max_depth = 10
+    # ── Security ────────────────────────────────────────────
+    security {
+        # Max query depth (0 = unlimited). Prevents deeply nested queries.
+        max_depth = 10
 
-# Max query complexity (0 = unlimited). Prevents expensive queries.
-graphql.security.max_complexity = 1000
+        # Max query complexity (0 = unlimited). Prevents expensive queries.
+        max_complexity = 1000
 
-# Introspection — disable in production to hide your schema.
-graphql.security.introspection = env("APP_DEBUG", true)
+        # Introspection — disable in production to hide schema.
+        introspection = ${APP_DEBUG:true}
 
-# Automatic Persisted Queries (APQ) — requires PSR-16 cache.
-graphql.security.persisted_queries = false
+        # Automatic Persisted Queries (APQ). Requires PSR-16 cache.
+        persisted_queries = false
 
-# Rate limiting per client IP (requires PSR-16 cache).
-graphql.security.rate_limit.max_requests = 100
-graphql.security.rate_limit.window_seconds = 60
+        # Rate limiting per client IP. Requires PSR-16 cache.
+        rate_limit {
+            max_requests   = 100
+            window_seconds = 60
+        }
+    }
 
-# ── Schema Cache ────────────────────────────────────────────
-# Enable in production for faster schema building.
-# Requires monkeyslegion-cache (PSR-16).
-graphql.cache.enabled = env("APP_DEBUG", false)
-graphql.cache.ttl = 3600
+    # ── Schema Cache ────────────────────────────────────────
+    # Enable in production for faster schema building.
+    # Requires monkeyslegion-cache (PSR-16).
+    cache {
+        enabled = false
+        ttl     = 3600
+    }
 
-# ── Subscriptions (WebSocket) ───────────────────────────────
-graphql.subscriptions.enabled = false
-graphql.subscriptions.driver = "memory"        # "memory" or "redis"
-graphql.subscriptions.host = "0.0.0.0"
-graphql.subscriptions.port = 6001
-graphql.subscriptions.redis_dsn = env("REDIS_DSN", "redis://127.0.0.1:6379")
+    # ── Subscriptions (WebSocket) ───────────────────────────
+    subscriptions {
+        enabled   = false
+        driver    = "memory"                                    # "memory" or "redis"
+        host      = "0.0.0.0"
+        port      = 6001
+        redis_dsn = ${REDIS_DSN:redis://127.0.0.1:6379}
+    }
 
-# ── Debug ───────────────────────────────────────────────────
-# Shows stack traces and internal error details in responses.
-# NEVER enable in production.
-graphql.debug = env("APP_DEBUG", false)
+    # ── Debug ───────────────────────────────────────────────
+    # Shows stack traces and internal error details in responses.
+    # NEVER enable in production.
+    debug = ${APP_DEBUG:false}
+}
