@@ -20,7 +20,8 @@ final class AutoCrudBuilder
 {
     public function __construct(
         private readonly ContainerInterface $container,
-    ) {}
+    ) {
+    }
 
     /**
      * Build auto-generated query fields.
@@ -38,7 +39,7 @@ final class AutoCrudBuilder
         foreach ($resources as $resource) {
             $reflection = new \ReflectionClass($resource);
             $shortName = $reflection->getShortName();
-            
+
             /** @var GraphQLResource $attr */
             $attr = $reflection->getAttributes(GraphQLResource::class)[0]->newInstance();
 
@@ -51,7 +52,7 @@ final class AutoCrudBuilder
                     'args' => [
                         'id' => Type::nonNull(Type::id()),
                     ],
-                    'resolve' => static function(mixed $root, array $args, GraphQLContext $ctx) use ($container, $attr, $resource) {
+                    'resolve' => static function (mixed $root, array $args, GraphQLContext $ctx) use ($container, $attr, $resource) {
                         $repository = $container->get($attr->repositoryClass ?? throw new \RuntimeException("GraphQLResource for $resource must define a repositoryClass"));
                         return $repository->find((int) $args['id']);
                     },
@@ -60,7 +61,7 @@ final class AutoCrudBuilder
 
             if ($attr->hasOperation('list')) {
                 $listName = $baseQueryName . 's'; // simple plural
-                
+
                 $filterScanner = new \MonkeysLegion\GraphQL\Scanner\FilterScanner();
                 $filterConfig = $filterScanner->map($resource);
 
@@ -69,7 +70,7 @@ final class AutoCrudBuilder
                     $listArgs['first'] = Type::int();
                     $listArgs['after'] = Type::string();
                 }
-                
+
                 if ($filterConfig['where'] !== null) {
                     $listArgs['where'] = $filterConfig['where'];
                 }
@@ -85,7 +86,7 @@ final class AutoCrudBuilder
                     $fields[$listName] = [
                         'type' => $connectionType,
                         'args' => $listArgs,
-                        'resolve' => static function(mixed $root, array $args, GraphQLContext $ctx) use ($container, $attr, $resource) {
+                        'resolve' => static function (mixed $root, array $args, GraphQLContext $ctx) use ($container, $attr, $resource) {
                             $repository = $container->get($attr->repositoryClass ?? throw new \RuntimeException("GraphQLResource for $resource must define a repositoryClass"));
                             return \MonkeysLegion\GraphQL\Resolver\PaginatorResolver::resolve($repository, $args);
                         },
@@ -94,7 +95,7 @@ final class AutoCrudBuilder
                     $fields[$listName] = [
                         'type' => Type::listOf(Type::nonNull($graphqlType)),
                         'args' => $listArgs,
-                        'resolve' => static function(mixed $root, array $args, GraphQLContext $ctx) use ($container, $attr, $resource) {
+                        'resolve' => static function (mixed $root, array $args, GraphQLContext $ctx) use ($container, $attr, $resource) {
                             $repository = $container->get($attr->repositoryClass ?? throw new \RuntimeException("GraphQLResource for $resource must define a repositoryClass"));
                             return \MonkeysLegion\GraphQL\Resolver\FilterResolver::resolveAll($repository, $args);
                         },
@@ -123,7 +124,7 @@ final class AutoCrudBuilder
         foreach ($resources as $resource) {
             $reflection = new \ReflectionClass($resource);
             $shortName = $reflection->getShortName();
-            
+
             /** @var GraphQLResource $attr */
             $attr = $reflection->getAttributes(GraphQLResource::class)[0]->newInstance();
 
