@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace MonkeysLegion\GraphQL\Builder;
 
 use GraphQL\Type\Definition\Type;
+use MonkeysLegion\GraphQL\Attribute\GraphQLResource;
 use MonkeysLegion\GraphQL\Context\GraphQLContext;
 use Psr\Container\ContainerInterface;
 
@@ -38,8 +39,8 @@ final class AutoCrudBuilder
             $reflection = new \ReflectionClass($resource);
             $shortName = $reflection->getShortName();
             
-            /** @var \MonkeysLegion\GraphQL\Attribute\GraphQLResource $attr */
-            $attr = $reflection->getAttributes(\MonkeysLegion\GraphQL\Attribute\GraphQLResource::class)[0]->newInstance();
+            /** @var GraphQLResource $attr */
+            $attr = $reflection->getAttributes(GraphQLResource::class)[0]->newInstance();
 
             $baseQueryName = $attr->queryName ?? strtolower($shortName);
             $graphqlType = $typeResolver($resource);
@@ -123,8 +124,8 @@ final class AutoCrudBuilder
             $reflection = new \ReflectionClass($resource);
             $shortName = $reflection->getShortName();
             
-            /** @var \MonkeysLegion\GraphQL\Attribute\GraphQLResource $attr */
-            $attr = $reflection->getAttributes(\MonkeysLegion\GraphQL\Attribute\GraphQLResource::class)[0]->newInstance();
+            /** @var GraphQLResource $attr */
+            $attr = $reflection->getAttributes(GraphQLResource::class)[0]->newInstance();
 
             $graphqlType = $typeResolver($resource);
 

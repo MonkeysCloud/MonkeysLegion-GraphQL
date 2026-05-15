@@ -11,8 +11,12 @@ use MonkeysLegion\Entity\Attributes\ManyToOne;
 use MonkeysLegion\Entity\Attributes\OneToMany;
 use MonkeysLegion\Entity\Attributes\OneToOne;
 use MonkeysLegion\Entity\Attributes\ManyToMany;
+use MonkeysLegion\GraphQL\Attribute\GraphQLResource;
+use MonkeysLegion\GraphQL\Context\GraphQLContext;
+use MonkeysLegion\GraphQL\Loader\EntityDataLoader;
 use MonkeysLegion\GraphQL\Type\DateTimeScalar;
 use MonkeysLegion\GraphQL\Type\JsonScalar;
+use MonkeysLegion\Query\Repository\UninitializedProxy;
 use ReflectionClass;
 use ReflectionProperty;
 use ReflectionNamedType;
@@ -160,7 +164,7 @@ final class EntityTypeMapper
                 $reflection = new \ReflectionProperty($root, $propName);
                 if ($reflection->isInitialized($root)) {
                     $val = $reflection->getValue($root);
-                    if ($val !== null && !($val instanceof \MonkeysLegion\Query\Repository\UninitializedProxy)) {
+                    if ($val !== null && !($val instanceof UninitializedProxy)) {
                         return $val;
                     }
                 }
@@ -177,10 +181,10 @@ final class EntityTypeMapper
                 }
 
                 $targetRef = new \ReflectionClass($targetEntity);
-                $resourceAttr = $targetRef->getAttributes(\MonkeysLegion\GraphQL\Attribute\GraphQLResource::class)[0]?->newInstance();
+                $resourceAttr = $targetRef->getAttributes(GraphQLResource::class)[0]?->newInstance();
                 $repoClass = $resourceAttr?->repositoryClass ?? throw new \RuntimeException("GraphQLResource for $targetEntity must define a repositoryClass");
 
-                $loader = $ctx->container->get(\MonkeysLegion\GraphQL\Loader\EntityDataLoader::class);
+                $loader = $ctx->container->get(EntityDataLoader::class);
                 $repository = $ctx->container->get($repoClass);
 
                 return $loader->loadById($repository, $fkValue);
@@ -209,10 +213,10 @@ final class EntityTypeMapper
                 }
 
                 $targetRef = new \ReflectionClass($targetEntity);
-                $resourceAttr = $targetRef->getAttributes(\MonkeysLegion\GraphQL\Attribute\GraphQLResource::class)[0]?->newInstance();
+                $resourceAttr = $targetRef->getAttributes(GraphQLResource::class)[0]?->newInstance();
                 $repoClass = $resourceAttr?->repositoryClass ?? throw new \RuntimeException("GraphQLResource for $targetEntity must define a repositoryClass");
 
-                $loader = $ctx->container->get(\MonkeysLegion\GraphQL\Loader\EntityDataLoader::class);
+                $loader = $ctx->container->get(EntityDataLoader::class);
                 $repository = $ctx->container->get($repoClass);
 
                 // For OneToMany, we query where `mappedBy_id` = root->id

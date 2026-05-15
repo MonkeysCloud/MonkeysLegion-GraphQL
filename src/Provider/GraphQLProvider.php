@@ -58,16 +58,23 @@ final class GraphQLProvider implements ProviderInterface
     {
         // --- Configuration ---
         $c->set(GraphQLConfig::class, static function () use ($root): GraphQLConfig {
-            $configPath = $root . '/config/graphql.mlc';
+            $configDir = $root . '/config';
             $data = [];
 
-            if (file_exists($configPath) && class_exists(\MonkeysLegion\Mlc\Loader::class)) {
-                $loader = new \MonkeysLegion\Mlc\Loader(new \MonkeysLegion\Mlc\Parser());
-                $config = $loader->load($configPath);
+            if (is_dir($configDir) && class_exists(\MonkeysLegion\Mlc\Loader::class)) {
+                try {
+                    $loader = new \MonkeysLegion\Mlc\Loader(
+                        new \MonkeysLegion\Mlc\Parser(),
+                        $configDir,
+                    );
+                    $config = $loader->load(['graphql']);
 
-                // MLC parser returns nested arrays; GraphQLConfig expects
-                // flat dot-notation keys (e.g. 'graphql.security.max_depth').
-                $data = self::flattenConfig($config->all());
+                    // MLC parser returns nested arrays; GraphQLConfig expects
+                    // flat dot-notation keys (e.g. 'graphql.security.max_depth').
+                    $data = self::flattenConfig($config->all());
+                } catch (\Throwable) {
+                    // Config file missing or parse error — use defaults
+                }
             }
 
             return new GraphQLConfig($data);
