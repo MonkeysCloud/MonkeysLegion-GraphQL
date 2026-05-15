@@ -20,11 +20,11 @@ class FilterResolverTest extends TestCase
 
         [$criteria, $orderBy] = FilterResolver::extractCriteria($args);
 
-        // Assert criteria
+        // Assert criteria — operators are now parsed
         $this->assertArrayHasKey('status', $criteria);
         $this->assertSame('ACTIVE', $criteria['status']);
-        $this->assertArrayHasKey('price_gt', $criteria);
-        $this->assertSame(100, $criteria['price_gt']);
+        $this->assertArrayHasKey('price', $criteria);
+        $this->assertSame(['>', 100], $criteria['price']);
 
         // Assert orderBy
         $this->assertCount(2, $orderBy);

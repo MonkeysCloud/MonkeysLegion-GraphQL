@@ -239,13 +239,20 @@ final class EntityTypeMapper
         $typeName = $type->getName();
 
         if ($isRel) {
+            // Determine the target entity class from the type name
+            $targetClass = $typeName;
+
             if ($typeName === 'array') {
-                // Will be resolved correctly during schema linking via targetEntity
-                // Returning string list as temporary placeholder
-                return static fn() => Type::listOf(Type::string());
+                // OneToMany/ManyToMany — the target entity type is resolved via
+                // the relationship attribute, not the PHP type. Return a deferred
+                // listOf that looks up the registered ObjectType at schema-build time.
+                return fn() => Type::listOf(
+                    $this->resolveEntityType($targetClass) ?? Type::string()
+                );
             }
-            // For to-one relationships, placeholder
-            return static fn() => Type::string();
+
+            // ManyToOne/OneToOne — resolve to the target entity's ObjectType
+            return fn() => $this->resolveEntityType($targetClass) ?? Type::string();
         }
 
         // Use static singletons for custom scalars to avoid duplicate type names
@@ -267,5 +274,43 @@ final class EntityTypeMapper
             },
             default                     => null,
         };
+    }
+
+    /**
+     * Resolve an entity class to its GraphQL ObjectType.
+     *
+     * Looks up the entity in the mappings registry and creates an ObjectType
+     * from the cached configuration. Returns null if the entity hasn't been
+     * mapped yet (fallback to Type::string()).
+     *
+     * @param class-string $entityClass The entity FQCN
+     *
+     * @return \GraphQL\Type\Definition\ObjectType|null
+     */
+    private function resolveEntityType(string $entityClass): ?\GraphQL\Type\Definition\ObjectType
+    {
+        // Check if we've already mapped this entity
+        if (isset($this->mappings[$entityClass])) {
+            $config = $this->mappings[$entityClass];
+            return new \GraphQL\Type\Definition\ObjectType([
+                'name'   => $config['name'],
+                'fields' => fn() => $config['fields'],
+            ]);
+        }
+
+        // Try to map it on-the-fly if the class exists
+        if (class_exists($entityClass)) {
+            try {
+                $config = $this->map($entityClass);
+                return new \GraphQL\Type\Definition\ObjectType([
+                    'name'   => $config['name'],
+                    'fields' => fn() => $config['fields'],
+                ]);
+            } catch (\Throwable) {
+                // Entity class doesn't have the expected attributes
+            }
+        }
+
+        return null;
     }
 }

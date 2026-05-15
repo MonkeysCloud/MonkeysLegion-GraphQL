@@ -58,4 +58,69 @@ final class FilterResolverTest extends TestCase
         ]);
         $this->assertSame([], $criteria);
     }
+
+    public function testOperatorGt(): void
+    {
+        [$criteria] = FilterResolver::extractCriteria([
+            'where' => ['price_gt' => 100],
+        ]);
+        $this->assertSame(['price' => ['>', 100]], $criteria);
+    }
+
+    public function testOperatorLte(): void
+    {
+        [$criteria] = FilterResolver::extractCriteria([
+            'where' => ['age_lte' => 30],
+        ]);
+        $this->assertSame(['age' => ['<=', 30]], $criteria);
+    }
+
+    public function testOperatorIn(): void
+    {
+        [$criteria] = FilterResolver::extractCriteria([
+            'where' => ['status_in' => ['active', 'pending']],
+        ]);
+        $this->assertSame(['status' => ['IN', ['active', 'pending']]], $criteria);
+    }
+
+    public function testOperatorNotIn(): void
+    {
+        [$criteria] = FilterResolver::extractCriteria([
+            'where' => ['role_not_in' => ['banned']],
+        ]);
+        $this->assertSame(['role' => ['NOT IN', ['banned']]], $criteria);
+    }
+
+    public function testOperatorLike(): void
+    {
+        [$criteria] = FilterResolver::extractCriteria([
+            'where' => ['name_like' => '%john%'],
+        ]);
+        $this->assertSame(['name' => ['LIKE', '%john%']], $criteria);
+    }
+
+    public function testOperatorNot(): void
+    {
+        [$criteria] = FilterResolver::extractCriteria([
+            'where' => ['status_not' => 'deleted'],
+        ]);
+        $this->assertSame(['status' => ['!=', 'deleted']], $criteria);
+    }
+
+    public function testMixedOperatorsAndEquality(): void
+    {
+        [$criteria] = FilterResolver::extractCriteria([
+            'where' => [
+                'category' => 'tech',
+                'price_gt' => 50,
+                'stock_lt' => 100,
+                'tags_in'  => ['php', 'graphql'],
+            ],
+        ]);
+
+        $this->assertSame('tech', $criteria['category']);
+        $this->assertSame(['>', 50], $criteria['price']);
+        $this->assertSame(['<', 100], $criteria['stock']);
+        $this->assertSame(['IN', ['php', 'graphql']], $criteria['tags']);
+    }
 }
