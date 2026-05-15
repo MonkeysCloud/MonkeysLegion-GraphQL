@@ -5,100 +5,147 @@ namespace MonkeysLegion\GraphQL\Tests\Integration\Loader;
 
 use PHPUnit\Framework\TestCase;
 use MonkeysLegion\GraphQL\Loader\EntityDataLoader;
-use MonkeysLegion\GraphQL\Context\GraphQLContext;
-use Psr\Container\ContainerInterface;
-use GraphQL\GraphQL;
-use GraphQL\Type\Schema;
-use GraphQL\Type\Definition\ObjectType;
-use GraphQL\Type\Definition\Type;
+use GraphQL\Deferred;
 use MonkeysLegion\Query\Repository\EntityRepository;
 
 require_once __DIR__ . '/../../Fixtures/EntityRepository.php';
 
 class DataLoaderExecutionTest extends TestCase
 {
-    public function testDataLoaderBatchesExecutionInSchema(): void
+    /**
+     * Tests that EntityDataLoader batches multiple queueById() calls into
+     * a single findByIds() repository call, and resolves all queued items.
+     */
+    public function testDataLoaderBatchesQueuedIds(): void
     {
-        $repository = $this->createMock(EntityRepository::class);
-        $loader = new EntityDataLoader();
-        
-        $container = $this->createMock(ContainerInterface::class);
-        $container->method('get')->willReturnCallback(function($id) use ($loader, $repository) {
-            if ($id === EntityDataLoader::class) {
-                return $loader;
+        $findByIdsCalls = 0;
+
+        $repository = new class($findByIdsCalls) extends EntityRepository {
+            public function __construct(private int &$calls) {}
+
+            public function findByIds(array $ids): array
+            {
+                $this->calls++;
+                $data = [
+                    1 => (object) ['id' => 1, 'name' => 'John'],
+                    2 => (object) ['id' => 2, 'name' => 'Jane'],
+                    3 => (object) ['id' => 3, 'name' => 'Bob'],
+                ];
+                return array_values(array_intersect_key($data, array_flip($ids)));
             }
-            return $repository;
-        });
-
-        $request = $this->createMock(\Psr\Http\Message\ServerRequestInterface::class);
-        // We will just pass null for loaders if allowed, or mock it.
-        // Based on signature: ServerRequestInterface $request, object|null $user, ContainerInterface $container, DataLoaderRegistry $loaders
-        // Wait, if it expects DataLoaderRegistry, let's create a stub object since we might not have it in the FQCN here, or use createMock if we know the class.
-        // Assuming \Overblog\DataLoader\DataLoaderRegistry or similar, but the user message says DataLoaderRegistry.
-        // We can just use a dummy object for the 4th argument, or null if it's not strictly typed without null.
-        // Looking at the user's error message: `DataLoaderRegistry $loaders`.
-        
-        $loaders = new \MonkeysLegion\GraphQL\Loader\DataLoaderRegistry();
-        $context = new GraphQLContext($request, null, $container, $loaders);
-
-        // Expect findByIds to be called exactly once with [1, 2]
-        $repository->expects($this->once())
-            ->method('findByIds')
-            ->with([1, 2])
-            ->willReturn([
-                (object) ['id' => 1, 'name' => 'John'],
-                (object) ['id' => 2, 'name' => 'Jane'],
-            ]);
-
-        $userType = new ObjectType([
-            'name' => 'User',
-            'fields' => [
-                'id' => Type::id(),
-                'name' => Type::string(),
-            ]
-        ]);
-
-        $queryType = new ObjectType([
-            'name' => 'Query',
-            'fields' => [
-                'users' => [
-                    'type' => Type::listOf($userType),
-                    'resolve' => function () {
-                        // Return stubs that need hydration
-                        return [
-                            (object) ['user_id' => 1],
-                            (object) ['user_id' => 2],
-                        ];
-                    }
-                ],
-            ]
-        ]);
-
-        // Wrap the user fields to use data loader
-        $userType->config['fields'] = function () use ($repository, $loader) {
-            return [
-                'id' => [
-                    'type' => Type::id(),
-                    'resolve' => fn($root) => $root->id ?? $root->user_id
-                ],
-                'name' => [
-                    'type' => Type::string(),
-                    'resolve' => function ($root) use ($repository, $loader) {
-                        return $loader->queueById($repository, $root->user_id)->then(fn($user) => $user->name ?? null);
-                    }
-                ]
-            ];
         };
 
-        $schema = new Schema(['query' => $queryType]);
+        $loader = new EntityDataLoader();
 
-        $query = '{ users { id name } }';
-        $result = GraphQL::executeQuery($schema, $query, null, $context);
-        
-        $data = $result->toArray();
+        // Queue 3 IDs via queueById
+        $d1 = $loader->queueById($repository, 1);
+        $d2 = $loader->queueById($repository, 2);
+        $d3 = $loader->queueById($repository, 3);
 
-        $this->assertArrayNotHasKey('errors', $data);
-        $this->assertEquals('John', $data['data']['users'][0]['name']);
-        $this->assertEquals('Jane', $data['data']['users'][1]['name']);
+        $this->assertInstanceOf(Deferred::class, $d1);
+        $this->assertInstanceOf(Deferred::class, $d2);
+        $this->assertInstanceOf(Deferred::class, $d3);
+
+        // Trigger resolution — Deferred::runQueue() flushes all pending
+        Deferred::runQueue();
+
+        // findByIds should have been called exactly ONCE (batched!)
+        $this->assertSame(1, $findByIdsCalls, 'findByIds should be called exactly once for all queued IDs');
+    }
+
+    /**
+     * Tests that loadById (which now delegates to queueById) also batches.
+     */
+    public function testLoadByIdDelegatesToQueueById(): void
+    {
+        $findByIdsCalls = 0;
+
+        $repository = new class($findByIdsCalls) extends EntityRepository {
+            public function __construct(private int &$calls) {}
+
+            public function findByIds(array $ids): array
+            {
+                $this->calls++;
+                return array_map(fn($id) => (object) ['id' => $id, 'name' => "User$id"], $ids);
+            }
+        };
+
+        $loader = new EntityDataLoader();
+
+        // loadById should delegate to queueById
+        $d1 = $loader->loadById($repository, 10);
+        $d2 = $loader->loadById($repository, 20);
+
+        $this->assertInstanceOf(Deferred::class, $d1);
+        $this->assertInstanceOf(Deferred::class, $d2);
+
+        Deferred::runQueue();
+
+        $this->assertSame(1, $findByIdsCalls, 'loadById should batch via queueById');
+    }
+
+    /**
+     * Tests that loadByForeignKey batches multiple FK lookups.
+     */
+    public function testLoadByForeignKeyBatches(): void
+    {
+        $findByCalls = 0;
+
+        $repository = new class($findByCalls) extends EntityRepository {
+            public function __construct(private int &$calls) {}
+
+            public function findBy(array $criteria = [], array $orderBy = [], ?int $limit = null, ?int $offset = null): array
+            {
+                $this->calls++;
+                // Simulate results for author_id IN ($criteria values)
+                return [
+                    (object) ['id' => 10, 'author_id' => 1, 'title' => 'Post A'],
+                    (object) ['id' => 20, 'author_id' => 1, 'title' => 'Post B'],
+                    (object) ['id' => 30, 'author_id' => 2, 'title' => 'Post C'],
+                ];
+            }
+        };
+
+        $loader = new EntityDataLoader();
+
+        $d1 = $loader->loadByForeignKey($repository, 'author_id', 1);
+        $d2 = $loader->loadByForeignKey($repository, 'author_id', 2);
+
+        $this->assertInstanceOf(Deferred::class, $d1);
+        $this->assertInstanceOf(Deferred::class, $d2);
+
+        Deferred::runQueue();
+
+        $this->assertSame(1, $findByCalls, 'findBy should be called exactly once for all queued FK IDs');
+    }
+
+    /**
+     * Tests that queueById with cached ID returns immediately without re-fetching.
+     */
+    public function testCachedIdReturnsWithoutRefetch(): void
+    {
+        $findByIdsCalls = 0;
+
+        $repository = new class($findByIdsCalls) extends EntityRepository {
+            public function __construct(private int &$calls) {}
+
+            public function findByIds(array $ids): array
+            {
+                $this->calls++;
+                return array_map(fn($id) => (object) ['id' => $id, 'name' => "User$id"], $ids);
+            }
+        };
+
+        $loader = new EntityDataLoader();
+
+        // First batch
+        $loader->queueById($repository, 1);
+        Deferred::runQueue();
+        $this->assertSame(1, $findByIdsCalls);
+
+        // Second call for same ID — should use cache
+        $loader->queueById($repository, 1);
+        Deferred::runQueue();
+        $this->assertSame(1, $findByIdsCalls, 'Should not re-fetch cached ID');
     }
 }

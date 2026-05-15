@@ -38,26 +38,8 @@ final class EntityDataLoader
      */
     public function loadById(EntityRepository $repository, int|string $id): Deferred
     {
-        $repoClass = $repository::class;
-
-        return new Deferred(function () use ($repository, $repoClass, $id) {
-            if (isset($this->primaryKeyCache[$repoClass][$id])) {
-                return $this->primaryKeyCache[$repoClass][$id];
-            }
-
-            if (!isset($this->primaryKeyBuffer[$repoClass])) {
-                $this->primaryKeyBuffer[$repoClass] = [];
-            }
-
-            // We use an internal Deferred inside the main Deferred to suspend execution
-            // until all IDs at this level are collected.
-            return new Deferred(function () use ($repository, $repoClass, $id) {
-                if (!isset($this->primaryKeyCache[$repoClass][$id])) {
-                    $this->flushPrimaryKey($repository, $repoClass);
-                }
-                return $this->primaryKeyCache[$repoClass][$id] ?? null;
-            });
-        });
+        // Delegate to queueById so the ID is always queued into the buffer
+        return $this->queueById($repository, $id);
     }
 
     /**
@@ -128,18 +110,10 @@ final class EntityDataLoader
         $ids = array_keys($buffer);
         $entities = $repository->findByIds($ids);
 
-        // Assume entities have public id property for demo, or extract properly.
-        // A robust implementation would use a hydrator or reflection.
         foreach ($entities as $entity) {
-            if (property_exists($entity, 'id')) {
-                $id = $entity->id;
+            $id = self::extractProperty($entity, 'id');
+            if ($id !== null) {
                 $this->primaryKeyCache[$repoClass][$id] = $entity;
-            } else {
-                $reflection = new \ReflectionClass($entity);
-                if ($reflection->hasProperty('id')) {
-                    $id = $reflection->getProperty('id')->getValue($entity);
-                    $this->primaryKeyCache[$repoClass][$id] = $entity;
-                }
             }
         }
 
@@ -163,9 +137,8 @@ final class EntityDataLoader
 
         $grouped = [];
         foreach ($entities as $entity) {
-            $reflection = new \ReflectionClass($entity);
-            if ($reflection->hasProperty($foreignKeyColumn)) {
-                $fkValue = $reflection->getProperty($foreignKeyColumn)->getValue($entity);
+            $fkValue = self::extractProperty($entity, $foreignKeyColumn);
+            if ($fkValue !== null) {
                 $grouped[$fkValue][] = $entity;
             }
         }
@@ -175,5 +148,37 @@ final class EntityDataLoader
             $this->foreignKeyCache[$repoClass][$foreignKeyColumn][$id] = $list;
             $callback($list);
         }
+    }
+
+    /**
+     * Extract a property value from an entity, handling non-public visibility.
+     *
+     * @param object $entity   The entity object
+     * @param string $property The property name to extract
+     *
+     * @return mixed The property value, or null if not found
+     */
+    private static function extractProperty(object $entity, string $property): mixed
+    {
+        // Handle dynamic/public properties (e.g. stdClass from (object) cast)
+        if (property_exists($entity, $property)) {
+            $reflection = new \ReflectionClass($entity);
+
+            // If the class has a declared property, use reflection for safety
+            if ($reflection->hasProperty($property)) {
+                $prop = $reflection->getProperty($property);
+
+                if (!$prop->isPublic()) {
+                    $prop->setAccessible(true);
+                }
+
+                return $prop->getValue($entity);
+            }
+
+            // Dynamic property (e.g. stdClass) — safe to access directly
+            return $entity->{$property};
+        }
+
+        return null;
     }
 }

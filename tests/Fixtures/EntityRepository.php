@@ -26,6 +26,4 @@ abstract class EntityRepository
     }
 }
 
-namespace MonkeysLegion\Query\Repository;
-
 interface UninitializedProxy {}

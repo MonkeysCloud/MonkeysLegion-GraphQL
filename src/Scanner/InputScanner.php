@@ -142,16 +142,24 @@ final class InputScanner
     {
         $typeName = $type->getName();
 
+        // Use static singletons for custom scalars to avoid duplicate type names
+        static $jsonScalar = null;
+        static $dateTimeScalar = null;
+
         return match ($typeName) {
             'int'                       => static fn() => Type::int(),
             'float'                     => static fn() => Type::float(),
             'string'                    => static fn() => Type::string(),
             'bool'                      => static fn() => Type::boolean(),
-            'array'                     => static fn() => new JsonScalar(),
+            'array'                     => static function () use (&$jsonScalar) {
+                return $jsonScalar ??= new JsonScalar();
+            },
             \DateTimeInterface::class,
             \DateTime::class,
-            \DateTimeImmutable::class   => static fn() => new DateTimeScalar(),
-            default                     => null, // E.g. entity relations (require ID inputs later)
+            \DateTimeImmutable::class   => static function () use (&$dateTimeScalar) {
+                return $dateTimeScalar ??= new DateTimeScalar();
+            },
+            default                     => null,
         };
     }
 }
